@@ -31,11 +31,15 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // 아이콘 컴포넌트 래퍼
+        // 아이콘 컴포넌트 래퍼 (에러 방지 처리 추가)
         const Icon = ({ name, className }) => {
             useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
+                try {
+                    if (window.lucide) {
+                        window.lucide.createIcons();
+                    }
+                } catch (e) {
+                    console.warn("아이콘 로드 실패:", e);
                 }
             }, [name]);
             return <i data-lucide={name} className={className}></i>;
@@ -48,7 +52,7 @@
             const [loading, setLoading] = useState(false);
             const [status, setStatus] = useState({ type: null, message: '' });
 
-            // 실제 생성하신 Google Apps Script 웹 앱 URL을 여기에 입력하세요.
+            // 실제 생성하신 Google Apps Script 웹 앱 URL입니다.
             const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxBbw_PCgIIGypwCnQJ-f32PL0qPwV6gJeFsM1qtXs0V0gltg1MpKFzkxagkQJbTd0WVQ/exec"; 
 
             const categories = [
@@ -59,7 +63,8 @@
             ];
 
             const handleSubmit = async (e) => {
-                e.preventDefault();
+                if (e) e.preventDefault();
+                
                 if (!url) {
                     showStatus('error', 'URL 주소를 입력해 주세요.');
                     return;
@@ -69,25 +74,26 @@
                 setStatus({ type: null, message: '' });
 
                 try {
-                    // 구글 앱 스크립트로 데이터 전송
+                    // GAS 리다이렉션 이슈를 피하기 위해 text/plain으로 전송하는 것이 가장 안정적입니다.
                     await fetch(GAS_WEB_APP_URL, {
                         method: 'POST',
-                        mode: 'no-cors',
+                        mode: 'no-cors', // 응답을 읽지는 않지만 요청은 보냅니다.
                         cache: 'no-cache',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'text/plain', 
+                        },
                         body: JSON.stringify({ url, category, memo }),
                     });
 
-                    // 전송 후 처리 (no-cors 모드는 응답을 직접 확인할 수 없어 시간 지연 후 성공 처리)
-                    setTimeout(() => {
-                        showStatus('success', '아이디어가 성공적으로 기록되었습니다!');
-                        setUrl('');
-                        setMemo('');
-                        setLoading(false);
-                    }, 1000);
+                    // 전송 완료 시 UI 즉시 복구
+                    showStatus('success', '성공적으로 저장되었습니다!');
+                    setUrl('');
+                    setMemo('');
                 } catch (error) {
-                    console.error(error);
-                    showStatus('error', '저장에 실패했습니다. 네트워크를 확인해 주세요.');
+                    console.error("저장 중 에러:", error);
+                    showStatus('error', '네트워크 연결을 확인해 주세요.');
+                } finally {
+                    // 어떤 경우에도 로딩 상태를 해제하여 하얀 화면이나 멈춤을 방지합니다.
                     setLoading(false);
                 }
             };
@@ -95,7 +101,7 @@
             const showStatus = (type, message) => {
                 setStatus({ type, message });
                 if (type === 'success') {
-                    setTimeout(() => setStatus({ type: null, message: '' }), 3500);
+                    setTimeout(() => setStatus({ type: null, message: '' }), 3000);
                 }
             };
 
@@ -108,7 +114,7 @@
                             <Icon name="sparkles" className="text-indigo-600 w-8 h-8" />
                         </div>
                         <h1 className="text-3xl font-black tracking-tight text-slate-900">Idea Archive</h1>
-                        <p className="text-slate-400 font-medium mt-2">당신의 소중한 영감을 기록하는 공간</p>
+                        <p className="text-slate-400 font-medium mt-2 text-sm px-4 underline decoration-indigo-200 underline-offset-4">당신의 소중한 영감을 기록하세요</p>
                     </header>
 
                     <main className="w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_20px_60px_rgba(79,70,229,0.06)] p-8 border border-slate-50 relative overflow-hidden flex-shrink-0">
@@ -123,7 +129,7 @@
                                     type="url"
                                     inputMode="url"
                                     placeholder="주소를 붙여넣으세요"
-                                    className="w-full px-5 py-4 bg-slate-50 border-0 rounded-2xl ring-1 ring-slate-100 focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-slate-700 placeholder:text-slate-300"
+                                    className="w-full px-5 py-4 bg-slate-50 border-0 rounded-2xl ring-1 ring-slate-100 focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-slate-700 placeholder:text-slate-300 shadow-inner"
                                     value={url}
                                     onChange={(e) => setUrl(e.target.value)}
                                 />
@@ -142,8 +148,8 @@
                                             onClick={() => setCategory(cat.id)}
                                             className={`relative flex flex-col items-start p-4 rounded-2xl transition-all duration-300 border-2 ${
                                                 category === cat.id 
-                                                ? 'border-indigo-500 bg-indigo-50/30' 
-                                                : 'border-transparent bg-slate-50 hover:bg-slate-100'
+                                                ? 'border-indigo-500 bg-indigo-50/30 shadow-md scale-[1.02]' 
+                                                : 'border-transparent bg-slate-50 hover:bg-slate-100 opacity-70'
                                             }`}
                                         >
                                             <div className={`p-2 rounded-xl mb-3 ${cat.bgColor} ${cat.color}`}>
@@ -165,7 +171,7 @@
                                 </label>
                                 <textarea
                                     placeholder="간단한 아이디어를 적어보세요"
-                                    className="w-full px-5 py-4 bg-slate-50 border-0 rounded-2xl ring-1 ring-slate-100 focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-slate-700 placeholder:text-slate-300 h-24 resize-none"
+                                    className="w-full px-5 py-4 bg-slate-50 border-0 rounded-2xl ring-1 ring-slate-100 focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-slate-700 placeholder:text-slate-300 h-24 resize-none shadow-inner"
                                     value={memo}
                                     onChange={(e) => setMemo(e.target.value)}
                                 />
@@ -173,8 +179,8 @@
 
                             {/* 상태 알림창 */}
                             {status.message && (
-                                <div className={`flex items-center p-4 rounded-2xl text-sm font-semibold animate-in fade-in zoom-in-95 ${
-                                    status.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                                <div className={`flex items-center p-4 rounded-2xl text-sm font-semibold animate-in fade-in slide-in-from-bottom-2 ${
+                                    status.type === 'success' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' : 'bg-rose-50 text-rose-700 ring-1 ring-rose-100'
                                 }`}>
                                     <Icon name={status.type === 'success' ? 'check-circle-2' : 'alert-circle'} className="w-5 h-5 mr-3 shrink-0" />
                                     {status.message}
@@ -185,10 +191,10 @@
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className={`group relative w-full py-5 rounded-[1.25rem] font-bold text-lg flex items-center justify-center transition-all shadow-xl active:scale-[0.98] overflow-hidden ${
+                                className={`group relative w-full py-5 rounded-[1.25rem] font-bold text-lg flex items-center justify-center transition-all shadow-xl active:scale-[0.95] overflow-hidden ${
                                     loading 
                                     ? 'bg-slate-200 text-slate-400' 
-                                    : 'bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700'
+                                    : 'bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700 active:bg-indigo-800'
                                 }`}
                             >
                                 {loading ? (
@@ -203,7 +209,7 @@
                         </form>
                     </main>
 
-                    <footer className="mt-8 mb-8 flex flex-col items-center">
+                    <footer className="mt-8 mb-12 flex flex-col items-center">
                         <div className="px-4 py-2 bg-slate-100 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-tighter">
                             Cloud Archive Connected
                         </div>
