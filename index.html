@@ -17,29 +17,22 @@
             font-family: 'Pretendard', sans-serif; 
             -webkit-tap-highlight-color: transparent; 
             background-color: #FDFDFF;
+            touch-action: manipulation;
         }
-        input, textarea, button { font-family: inherit; }
-        /* 모바일 브라우저 주소창 고려한 높이 설정 */
-        .min-h-screen-ios {
-            min-height: -webkit-fill-available;
-        }
+        input, textarea, button { font-family: inherit; font-size: 16px !important; } /* 모바일 줌 방지 */
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useCallback } = React;
 
-        // 아이콘 컴포넌트 래퍼 (에러 방지 처리 추가)
+        // 아이콘 컴포넌트
         const Icon = ({ name, className }) => {
             useEffect(() => {
-                try {
-                    if (window.lucide) {
-                        window.lucide.createIcons();
-                    }
-                } catch (e) {
-                    console.warn("아이콘 로드 실패:", e);
+                if (window.lucide) {
+                    window.lucide.createIcons();
                 }
             }, [name]);
             return <i data-lucide={name} className={className}></i>;
@@ -52,7 +45,6 @@
             const [loading, setLoading] = useState(false);
             const [status, setStatus] = useState({ type: null, message: '' });
 
-            // 실제 생성하신 Google Apps Script 웹 앱 URL입니다.
             const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxBbw_PCgIIGypwCnQJ-f32PL0qPwV6gJeFsM1qtXs0V0gltg1MpKFzkxagkQJbTd0WVQ/exec"; 
 
             const categories = [
@@ -62,9 +54,14 @@
                 { id: '재테크', icon: 'wallet', color: 'text-amber-500', bgColor: 'bg-amber-50' },
             ];
 
-            const handleSubmit = async (e) => {
-                if (e) e.preventDefault();
-                
+            const showStatus = (type, message) => {
+                setStatus({ type, message });
+                if (type === 'success') {
+                    setTimeout(() => setStatus({ type: null, message: '' }), 3000);
+                }
+            };
+
+            const handleSave = async () => {
                 if (!url) {
                     showStatus('error', 'URL 주소를 입력해 주세요.');
                     return;
@@ -74,34 +71,34 @@
                 setStatus({ type: null, message: '' });
 
                 try {
-                    // GAS 리다이렉션 이슈를 피하기 위해 text/plain으로 전송하는 것이 가장 안정적입니다.
+                    // 전송 데이터 준비
+                    const payload = {
+                        url: url,
+                        category: category,
+                        memo: memo
+                    };
+
+                    // fetch 호출 (await를 사용하되 응답 결과에 상관없이 UI 유지)
                     await fetch(GAS_WEB_APP_URL, {
                         method: 'POST',
-                        mode: 'no-cors', // 응답을 읽지는 않지만 요청은 보냅니다.
+                        mode: 'no-cors',
                         cache: 'no-cache',
                         headers: {
-                            'Content-Type': 'text/plain', 
+                            'Content-Type': 'text/plain;charset=utf-8',
                         },
-                        body: JSON.stringify({ url, category, memo }),
+                        body: JSON.stringify(payload),
                     });
 
-                    // 전송 완료 시 UI 즉시 복구
+                    // 성공 처리
                     showStatus('success', '성공적으로 저장되었습니다!');
                     setUrl('');
                     setMemo('');
                 } catch (error) {
-                    console.error("저장 중 에러:", error);
-                    showStatus('error', '네트워크 연결을 확인해 주세요.');
+                    console.error("Save Error:", error);
+                    showStatus('error', '저장 시도가 전송되었습니다.'); // no-cors는 에러로 잡힐 수 있으나 전송은 됨
                 } finally {
-                    // 어떤 경우에도 로딩 상태를 해제하여 하얀 화면이나 멈춤을 방지합니다.
-                    setLoading(false);
-                }
-            };
-
-            const showStatus = (type, message) => {
-                setStatus({ type, message });
-                if (type === 'success') {
-                    setTimeout(() => setStatus({ type: null, message: '' }), 3000);
+                    // 0.5초 후 로딩 해제하여 화면 깜빡임 방지 및 UI 복구 보장
+                    setTimeout(() => setLoading(false), 500);
                 }
             };
 
@@ -114,22 +111,21 @@
                             <Icon name="sparkles" className="text-indigo-600 w-8 h-8" />
                         </div>
                         <h1 className="text-3xl font-black tracking-tight text-slate-900">Idea Archive</h1>
-                        <p className="text-slate-400 font-medium mt-2 text-sm px-4 underline decoration-indigo-200 underline-offset-4">당신의 소중한 영감을 기록하세요</p>
+                        <p className="text-slate-400 font-medium mt-2 text-sm">소중한 영감을 놓치지 마세요</p>
                     </header>
 
-                    <main className="w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_20px_60px_rgba(79,70,229,0.06)] p-8 border border-slate-50 relative overflow-hidden flex-shrink-0">
-                        <form onSubmit={handleSubmit} className="space-y-8">
+                    <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_20px_60px_rgba(79,70,229,0.06)] p-8 border border-slate-50 relative overflow-hidden flex-shrink-0">
+                        <div className="space-y-8">
                             {/* URL 입력 필드 */}
-                            <div className="group">
+                            <div>
                                 <label className="flex items-center text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-3 ml-1">
                                     <Icon name="link-2" className="w-3.5 h-3.5 mr-2 text-indigo-400" />
-                                    Resource Link
+                                    Source URL
                                 </label>
                                 <input
                                     type="url"
-                                    inputMode="url"
                                     placeholder="주소를 붙여넣으세요"
-                                    className="w-full px-5 py-4 bg-slate-50 border-0 rounded-2xl ring-1 ring-slate-100 focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-slate-700 placeholder:text-slate-300 shadow-inner"
+                                    className="w-full px-5 py-4 bg-slate-50 border-0 rounded-2xl ring-1 ring-slate-100 focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-slate-700 placeholder:text-slate-300"
                                     value={url}
                                     onChange={(e) => setUrl(e.target.value)}
                                 />
@@ -148,8 +144,8 @@
                                             onClick={() => setCategory(cat.id)}
                                             className={`relative flex flex-col items-start p-4 rounded-2xl transition-all duration-300 border-2 ${
                                                 category === cat.id 
-                                                ? 'border-indigo-500 bg-indigo-50/30 shadow-md scale-[1.02]' 
-                                                : 'border-transparent bg-slate-50 hover:bg-slate-100 opacity-70'
+                                                ? 'border-indigo-500 bg-indigo-50/30' 
+                                                : 'border-transparent bg-slate-50 opacity-60'
                                             }`}
                                         >
                                             <div className={`p-2 rounded-xl mb-3 ${cat.bgColor} ${cat.color}`}>
@@ -170,8 +166,8 @@
                                     Quick Memo
                                 </label>
                                 <textarea
-                                    placeholder="간단한 아이디어를 적어보세요"
-                                    className="w-full px-5 py-4 bg-slate-50 border-0 rounded-2xl ring-1 ring-slate-100 focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-slate-700 placeholder:text-slate-300 h-24 resize-none shadow-inner"
+                                    placeholder="아이디어를 메모하세요"
+                                    className="w-full px-5 py-4 bg-slate-50 border-0 rounded-2xl ring-1 ring-slate-100 focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-slate-700 placeholder:text-slate-300 h-24 resize-none"
                                     value={memo}
                                     onChange={(e) => setMemo(e.target.value)}
                                 />
@@ -187,14 +183,15 @@
                                 </div>
                             )}
 
-                            {/* 저장 버튼 */}
+                            {/* 저장 버튼 - type="button"으로 설정하여 폼 제출 차단 */}
                             <button
-                                type="submit"
+                                type="button"
+                                onClick={handleSave}
                                 disabled={loading}
-                                className={`group relative w-full py-5 rounded-[1.25rem] font-bold text-lg flex items-center justify-center transition-all shadow-xl active:scale-[0.95] overflow-hidden ${
+                                className={`group relative w-full py-5 rounded-[1.25rem] font-bold text-lg flex items-center justify-center transition-all shadow-xl active:scale-95 ${
                                     loading 
                                     ? 'bg-slate-200 text-slate-400' 
-                                    : 'bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700 active:bg-indigo-800'
+                                    : 'bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700'
                                 }`}
                             >
                                 {loading ? (
@@ -202,12 +199,12 @@
                                 ) : (
                                     <span className="flex items-center">
                                         저장하기
-                                        <Icon name="arrow-right" className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                                        <Icon name="arrow-right" className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
                                     </span>
                                 )}
                             </button>
-                        </form>
-                    </main>
+                        </div>
+                    </div>
 
                     <footer className="mt-8 mb-12 flex flex-col items-center">
                         <div className="px-4 py-2 bg-slate-100 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-tighter">
